@@ -32,12 +32,24 @@ def get_user(uid):
         users[uid] = {"money": 1000}
     return users[uid]
 
-# ================= WIN/LOSE GIF =================
+# ================= GIF =================
 
 WIN_GIF = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
 LOSE_GIF = "https://media.giphy.com/media/ISOckXUybVfQ4/giphy.gif"
 
-# ================= SLOT ULTRA REAL =================
+# ================= MENU =================
+
+@bot.command()
+async def game(ctx):
+    embed = discord.Embed(title="🎮 DANH SÁCH GAME", color=0x00ffcc)
+    embed.add_field(name="🎰 Slot", value="!slot <tiền>", inline=False)
+    embed.add_field(name="🎲 Tài xỉu", value="!taixiu <tiền> <tài/xỉu>", inline=False)
+    embed.add_field(name="🪙 Flip", value="!flip <tiền>", inline=False)
+    embed.add_field(name="🎯 Roll", value="!roll <tiền>", inline=False)
+    embed.add_field(name="💣 Bomb", value="!bomb <tiền>", inline=False)
+    await ctx.send(embed=embed)
+
+# ================= SLOT =================
 
 @bot.command()
 async def slot(ctx, bet: int):
@@ -48,37 +60,26 @@ async def slot(ctx, bet: int):
     icons = ["🍒","🍋","🍉","7️⃣","💎"]
     msg = await ctx.send("🎰 Đang quay...")
 
-    reels = [[random.choice(icons) for _ in range(20)] for _ in range(3)]
-    pos = [0,0,0]
-    speed = [0.05, 0.07, 0.09]
+    r = ["❓","❓","❓"]
 
-    # quay lệch nhau
-    for i in range(20):
-        display = []
-        for j in range(3):
-            pos[j] = (pos[j] + 1) % len(reels[j])
-            display.append(reels[j][pos[j]])
-        await msg.edit(content="🎰 " + " | ".join(display))
-        await asyncio.sleep(min(speed))
-        speed = [s+0.01 for s in speed]
+    # quay animation
+    for i in range(12):
+        temp = [random.choice(icons) for _ in range(3)]
+        await msg.edit(content="🎰 " + " | ".join(temp))
+        await asyncio.sleep(0.08 + i*0.01)
 
-    # dừng từng cột
-    final = []
+    # dừng từng cột (fix không hiển thị 2 lần)
     for i in range(3):
-        for _ in range(6):
-            temp = final + [random.choice(icons)] + ["❓"]*(2-i)
+        for _ in range(4):
+            temp = r.copy()
+            temp[i] = random.choice(icons)
             await msg.edit(content="🎰 " + " | ".join(temp))
             await asyncio.sleep(0.1)
-        final.append(random.choice(icons))
-        await msg.edit(content="🎰 " + " | ".join(final + ["❓"]*(2-i)))
-        await asyncio.sleep(0.5)
+        r[i] = random.choice(icons)
+        await msg.edit(content="🎰 " + " | ".join(r))
+        await asyncio.sleep(0.3)
 
-    r = final
-
-    # near win (tạo cảm giác suýt trúng)
-    if r[0] == r[1] and r[2] != r[1] and random.random() < 0.3:
-        r[2] = random.choice([x for x in icons if x != r[1]])
-
+    # kết quả
     if r[0] == r[1] == r[2]:
         win = bet * 10
         u["money"] += win
@@ -97,7 +98,7 @@ async def slot(ctx, bet: int):
 
     await msg.edit(content=None, embed=embed)
 
-# ================= TAIXIU ULTRA =================
+# ================= TAIXIU =================
 
 @bot.command()
 async def taixiu(ctx, bet: int, choice: str):
@@ -107,17 +108,14 @@ async def taixiu(ctx, bet: int, choice: str):
 
     msg = await ctx.send("🎲 Đang lắc...")
 
-    speed = 0.05
-
-    # lắc mạnh
-    for i in range(15):
+    # animation lắc
+    for i in range(12):
         fake = [random.randint(1,6) for _ in range(3)]
         await msg.edit(content=f"🎲 {fake}")
-        await asyncio.sleep(speed)
-        speed += 0.01
+        await asyncio.sleep(0.06 + i*0.01)
 
-    await msg.edit(content="🎲 Đang mở bát...")
-    await asyncio.sleep(1)
+    await msg.edit(content="🎲 Mở bát...")
+    await asyncio.sleep(0.8)
 
     dice = [random.randint(1,6) for _ in range(3)]
     total = sum(dice)
@@ -143,6 +141,6 @@ async def taixiu(ctx, bet: int, choice: str):
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user} ULTRA REAL CASINO ONLINE")
+    print(f"{bot.user} FIXED & READY")
 
 bot.run(TOKEN)
