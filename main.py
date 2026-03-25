@@ -1,4 +1,3 @@
-# FULL FINAL MAX LEVEL DISCORD CASINO BOT
 import discord
 from discord.ext import commands
 import json, random, os, asyncio, time
@@ -6,19 +5,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
+if not TOKEN:
+    raise Exception("❌ TOKEN not found")
 
-intents = discord.Intents.all()
+# ================= CONFIG =================
+WIN_GIF = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
+LOSE_GIF = "https://media.giphy.com/media/3o7TKr3nzbh5WgCFxe/giphy.gif"
+
+intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================= DATA =================
-
 def load():
+    if not os.path.exists("users.json"):
+        with open("users.json", "w") as f:
+            json.dump({}, f)
     try:
         with open("users.json", "r") as f:
             return json.load(f)
     except:
         return {}
-
 
 def save():
     with open("users.json", "w") as f:
@@ -26,98 +33,70 @@ def save():
 
 users = load()
 
-
 def get_user(uid):
     uid = str(uid)
     if uid not in users:
-        users[uid] = {
-            "money": 1000,
-            "bank": 0,
-            "last_daily": 0,
-            "last_work": 0
-        }
+        users[uid] = {"money": 1000, "bank": 0, "last_daily": 0, "last_work": 0}
     return users[uid]
-
-# ================= UTIL =================
 
 def parse_bet(u, bet):
     if isinstance(bet, str) and bet.lower() == "all":
-        return u["money"]
-    return int(bet)
+        return max(1, u["money"])
+    return max(1, int(bet))
 
-# ================= BAL =================
+# ================= BASIC =================
 @bot.command()
-async def bal(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    u = get_user(member.id)
-    total = u["money"] + u["bank"]
+async def bal(ctx):
+    u = get_user(ctx.author.id)
+    await ctx.send(f"💰 {u['money']:,} | 🏦 {u['bank']:,}")
 
-    embed = discord.Embed(title=f"💰 {member.name}", color=0x00ffcc)
-    embed.add_field(name="💵 Tiền", value=f"{u['money']:,}")
-    embed.add_field(name="🏦 Bank", value=f"{u['bank']:,}")
-    embed.add_field(name="💎 Tổng", value=f"{total:,}")
-
-    if member.avatar:
-        embed.set_thumbnail(url=member.avatar.url)
-
-    await ctx.send(embed=embed)
-
-# ================= PAY CONFIRM =================
+# ================= PAY =================
 @bot.command()
 async def pay(ctx, member: discord.Member, amount: int):
     u = get_user(ctx.author.id)
-    if u["money"] < amount:
-        return await ctx.send("❌ Không đủ tiền")
+    if amount <= 0 or u["money"] < amount:
+        return await ctx.send("❌")
 
-    msg = await ctx.send(f"💸 Xác nhận chuyển {amount:,} đến {member.mention}? (yes/no)")
-
+    msg = await ctx.send(f"💸 Chuyển {amount:,}? (yes/no)")
     def check(m): return m.author == ctx.author
 
     try:
         reply = await bot.wait_for("message", timeout=10, check=check)
     except:
-        return await msg.edit(content="⏳ Hết thời gian")
+        return await ctx.send("⏳ Timeout")
 
     if reply.content.lower() != "yes":
-        return await ctx.send("❌ Đã huỷ")
+        return await ctx.send("❌ Hủy")
 
     r = get_user(member.id)
     u["money"] -= amount
     r["money"] += amount
     save()
 
-    await ctx.send("✅ Thành công")
+    await ctx.send("✅ Done")
 
 # ================= BANK =================
 @bot.command()
-async def deposit(ctx, amount: int):
+async def deposit(ctx, amount:int):
     u = get_user(ctx.author.id)
-    if u["money"] < amount:
+    if amount <= 0 or u["money"] < amount:
         return await ctx.send("❌")
-
-    msg = await ctx.send("🏦 Đang xử lý...")
-
-    for s in ["Kiểm tra", "Xác thực", "Chuyển", "Xong"]:
-        await msg.edit(content=f"🏦 {s}...")
-        await asyncio.sleep(0.5)
 
     u["money"] -= amount
     u["bank"] += amount
     save()
-
-    await msg.edit(content=f"✅ Đã gửi {amount:,}")
+    await ctx.send("🏦 Đã gửi")
 
 @bot.command()
-async def withdraw(ctx, amount: int):
+async def withdraw(ctx, amount:int):
     u = get_user(ctx.author.id)
-    if u["bank"] < amount:
+    if amount <= 0 or u["bank"] < amount:
         return await ctx.send("❌")
 
     u["bank"] -= amount
     u["money"] += amount
     save()
-
-    await ctx.send(f"💸 Rút {amount:,}")
+    await ctx.send("💸 Đã rút")
 
 # ================= DAILY =================
 @bot.command()
@@ -130,7 +109,6 @@ async def daily(ctx):
     u["money"] += reward
     u["last_daily"] = time.time()
     save()
-
     await ctx.send(f"🎁 +{reward}")
 
 # ================= WORK =================
@@ -161,45 +139,40 @@ async def slot(ctx, bet):
     icons = ["🍒","🍋","🍉","7️⃣","💎"]
     msg = await ctx.send("🎰...")
 
-    for _ in range(10):
+    for i in range(10):
         await msg.edit(content="🎰 " + " | ".join(random.choices(icons,k=3)))
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.07)
 
     r = [random.choice(icons) for _ in range(3)]
 
     if r[0]==r[1]==r[2]:
         u["money"] += bet*10
-        text="WIN"
+        text="🎉 WIN"
+        gif=WIN_GIF
     else:
         u["money"] -= bet
-        text="LOSE"
+        text="💀 LOSE"
+        gif=LOSE_GIF
 
     save()
-    await msg.edit(content=f"🎰 {' | '.join(r)}\n{text}")
 
-# ================= TAIXIU (PHYSICS DICE + GIF) =================
+    embed = discord.Embed(title="🎰 SLOT",description=f"{' | '.join(r)}\n{text}")
+    embed.set_image(url=gif)
+
+    await msg.edit(content=None, embed=embed)
+
+# ================= TAIXIU =================
 @bot.command()
 async def taixiu(ctx, bet, choice:str):
     u = get_user(ctx.author.id)
     bet = parse_bet(u, bet)
 
-    if u["money"] < bet:
-        return await ctx.send("❌")
-
-    msg = await ctx.send("🎲 Lắc xúc xắc...")
-
+    msg = await ctx.send("🎲 Lắc...")
     emoji = ["⚀","⚁","⚂","⚃","⚄","⚅"]
 
-    # hiệu ứng vật lý (nhảy + đổi góc)
-    velocity = 0.05
-    for i in range(20):
-        dice_anim = [random.choice(emoji) for _ in range(3)]
-        await msg.edit(content=f"🎲 {' '.join(dice_anim)}")
-        await asyncio.sleep(velocity)
-        velocity += 0.01  # chậm dần giống vật lý
-
-    await msg.edit(content="🎲 Đang dừng...")
-    await asyncio.sleep(0.7)
+    for i in range(15):
+        await msg.edit(content="🎲 " + " ".join(random.choices(emoji,k=3)))
+        await asyncio.sleep(0.07 + i*0.01)
 
     dice = [random.randint(1,6) for _ in range(3)]
     visual = " ".join([emoji[d-1] for d in dice])
@@ -209,41 +182,60 @@ async def taixiu(ctx, bet, choice:str):
 
     if choice == result:
         u["money"] += bet
-        text = "🎉 WIN"
-        gif = WIN_GIF
+        text="🎉 WIN"
+        gif=WIN_GIF
     else:
         u["money"] -= bet
-        text = "💀 LOSE"
-        gif = LOSE_GIF
+        text="💀 LOSE"
+        gif=LOSE_GIF
 
     save()
 
-    embed = discord.Embed(
-        title="🎲 TÀI XỈU PHYSICS",
-        description=f"{visual}
-Tổng: {total} → {result}
-{text}",
-        color=random.choice([0x00ffcc,0xffcc00,0xff0066])
-    )
+    embed = discord.Embed(title="🎲 TÀI XỈU",description=f"{visual}\nTổng: {total} → {result}\n{text}")
     embed.set_image(url=gif)
 
     await msg.edit(content=None, embed=embed)
 
-# ================= FLIP =================
+# ================= BAU CUA =================
 @bot.command()
-async def flip(ctx, bet, choice:str):
+async def baucu(ctx, bet, choice:str):
     u = get_user(ctx.author.id)
     bet = parse_bet(u, bet)
 
-    result = random.choice(["heads","tails"])
+    animals = ["nai","bầu","gà","cá","cua","tôm"]
+    icons = {"nai":"🦌","bầu":"🍐","gà":"🐓","cá":"🐟","cua":"🦀","tôm":"🦐"}
 
-    if choice == result:
-        u["money"] += bet
+    if choice not in animals:
+        return await ctx.send("❌")
+
+    msg = await ctx.send("🎲 Lắc...")
+
+    for i in range(15):
+        fake = [icons[random.choice(animals)] for _ in range(3)]
+        await msg.edit(content="🎲 " + " | ".join(fake))
+        await asyncio.sleep(0.07 + i*0.01)
+
+    dice = [random.choice(animals) for _ in range(3)]
+    visual = " | ".join([icons[d] for d in dice])
+
+    count = dice.count(choice)
+
+    if count>0:
+        win = bet*count
+        u["money"] += win
+        text=f"🎉 Trúng {count} +{win}"
+        gif=WIN_GIF
     else:
         u["money"] -= bet
+        text="💀 Thua"
+        gif=LOSE_GIF
 
     save()
-    await ctx.send(f"🪙 {result}")
+
+    embed = discord.Embed(title="🎲 BẦU CUA",description=f"{visual}\n{text}")
+    embed.set_image(url=gif)
+
+    await msg.edit(content=None, embed=embed)
 
 # ================= BLACKJACK =================
 games = {}
@@ -251,39 +243,41 @@ games = {}
 def draw(): return random.randint(1,11)
 
 @bot.command()
-async def bj(ctx, bet:int):
+async def bj(ctx, bet):
     u = get_user(ctx.author.id)
-    if u["money"] < bet:
-        return
+    bet = parse_bet(u, bet)
 
     games[ctx.author.id] = {
         "bet": bet,
-        "player": [draw(),draw()],
-        "dealer": [draw(),draw()]
+        "player":[draw(),draw()],
+        "dealer":[draw(),draw()]
     }
 
     g = games[ctx.author.id]
-    await ctx.send(f"{g['player']} | Dealer {g['dealer'][0]}, ?")
+    await ctx.send(f"🃏 {g['player']} ({sum(g['player'])}) | Dealer: {g['dealer'][0]}, ?")
 
 @bot.command()
 async def hit(ctx):
-    g = games.get(ctx.author.id)
-    if not g: return
+    if ctx.author.id not in games:
+        return await ctx.send("❌")
 
+    g = games[ctx.author.id]
     g["player"].append(draw())
 
     if sum(g["player"])>21:
         get_user(ctx.author.id)["money"] -= g["bet"]
-        games.pop(ctx.author.id)
         save()
-        await ctx.send("💀 Bù")
-    else:
-        await ctx.send(str(g["player"]))
+        games.pop(ctx.author.id)
+        return await ctx.send("💀 Bù")
+
+    await ctx.send(str(g["player"]))
 
 @bot.command()
 async def stand(ctx):
-    g = games.get(ctx.author.id)
-    if not g: return
+    if ctx.author.id not in games:
+        return
+
+    g = games[ctx.author.id]
 
     while sum(g["dealer"])<17:
         g["dealer"].append(draw())
@@ -295,122 +289,57 @@ async def stand(ctx):
 
     if d>21 or p>d:
         u["money"] += g["bet"]
+        gif=WIN_GIF
+        text="🎉 WIN"
     else:
         u["money"] -= g["bet"]
+        gif=LOSE_GIF
+        text="💀 LOSE"
 
     save()
     games.pop(ctx.author.id)
 
-    await ctx.send(f"{p} vs {d}")
+    embed = discord.Embed(title="🃏 BLACKJACK",description=f"{p} vs {d}\n{text}")
+    embed.set_image(url=gif)
+
+    await ctx.send(embed=embed)
 
 # ================= BACCARAT =================
 @bot.command()
-async def baccarat(ctx, bet:int, choice:str):
-    u = get_user(ctx.author.id)
-    if u["money"] < bet:
-        return
-
-    p = random.randint(0,9)
-    b = random.randint(0,9)
-
-    result = "player" if p>b else "banker" if b>p else "tie"
-
-    if choice == result:
-        u["money"] += bet*2
-    else:
-        u["money"] -= bet
-
-    save()
-    await ctx.send(f"P:{p} B:{b} => {result}")
-
-# ================= BOMB =================
-@bot.command()
-async def bomb(ctx, bet:int, choice:str):
-    u = get_user(ctx.author.id)
-    result = random.choice(["sống","nổ"])
-
-    if choice == result:
-        u["money"] += bet*3
-    else:
-        u["money"] -= bet
-
-    save()
-    await ctx.send(result)
-
-# ================= BAU CUA (PHYSICS + GIF) =================
-@bot.command()
-async def baucu(ctx, bet, choice:str):
+async def baccarat(ctx, bet, choice:str):
     u = get_user(ctx.author.id)
     bet = parse_bet(u, bet)
 
-    animals = ["nai","bầu","gà","cá","cua","tôm"]
+    player = random.randint(0,9)
+    banker = random.randint(0,9)
 
-    if choice not in animals:
-        return await ctx.send("❌ Chọn: nai/bầu/gà/cá/cua/tôm")
+    result = "player" if player>banker else "banker" if banker>player else "tie"
 
-    icons = {
-        "nai":"🦌","bầu":"🍐","gà":"🐓",
-        "cá":"🐟","cua":"🦀","tôm":"🦐"
-    }
-
-    msg = await ctx.send("🎲 Lắc bầu cua...")
-
-    velocity = 0.05
-    for i in range(20):
-        fake = [icons[random.choice(animals)] for _ in range(3)]
-        await msg.edit(content="🎲 " + " | ".join(fake))
-        await asyncio.sleep(velocity)
-        velocity += 0.01
-
-    await msg.edit(content="🎲 Mở bát...")
-    await asyncio.sleep(0.8)
-
-    dice = [random.choice(animals) for _ in range(3)]
-    visual = " | ".join([icons[d] for d in dice])
-
-    count = dice.count(choice)
-
-    if count > 0:
-        win = bet * count
-        u["money"] += win
-        result_text = f"🎉 Trúng {count} lần +{win:,}"
-        gif = WIN_GIF
+    if choice==result:
+        u["money"] += bet*2
+        gif=WIN_GIF
+        text="🎉 WIN"
     else:
         u["money"] -= bet
-        result_text = "💀 Không trúng"
-        gif = LOSE_GIF
+        gif=LOSE_GIF
+        text="💀 LOSE"
 
     save()
 
-    embed = discord.Embed(
-        title="🎲 BẦU CUA PHYSICS",
-        description=result_text,
-        color=random.choice([0x00ffcc,0xffcc00,0xff0066])
-    )
-
-    embed.add_field(name="Kết quả", value=visual)
+    embed = discord.Embed(title="🃏 BACCARAT",description=f"P:{player} B:{banker}\n{result}\n{text}")
     embed.set_image(url=gif)
 
-    await msg.edit(content=None, embed=embed)
+    await ctx.send(embed=embed)
 
-# ================= TOP =================
-@bot.command()
-async def top(ctx):
-    s = sorted(users.items(), key=lambda x: x[1]["money"]+x[1]["bank"], reverse=True)
-    msg="TOP\n"
-    for i,(uid,data) in enumerate(s[:5]):
-        user=await bot.fetch_user(int(uid))
-        msg+=f"{i+1}. {user.name} - {data['money']+data['bank']}\n"
-    await ctx.send(msg)
-
-# ================= HELP =================
-@bot.command()
-async def guide(ctx):
-    await ctx.send("slot, taixiu, flip, bj, baccarat, bomb | bal, pay, bank...")
+# ================= ERROR =================
+@bot.event
+async def on_command_error(ctx, error):
+    print("ERROR:", error)
+    await ctx.send("⚠️ Lỗi")
 
 # ================= READY =================
 @bot.event
 async def on_ready():
-    print("BOT MAX ONLINE")
+    print(f"{bot.user} ONLINE")
 
 bot.run(TOKEN)
