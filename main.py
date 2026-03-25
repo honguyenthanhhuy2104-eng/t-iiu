@@ -1,18 +1,16 @@
 import discord
 from discord.ext import commands
-import json
-import random
-import os
-import time
+import json, random, os, time, asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
-
 TOKEN = os.getenv("TOKEN")
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 # ================= DATA =================
+
 def load():
     try:
         with open("users.json", "r") as f:
@@ -20,253 +18,221 @@ def load():
     except:
         return {}
 
+
 def save():
     with open("users.json", "w") as f:
         json.dump(users, f, indent=4)
 
 users = load()
 
+
 def get_user(uid):
     uid = str(uid)
     if uid not in users:
-        users[uid] = {
-            "money": 1000,
-            "bank": 0,
-            "last_daily": 0,
-            "last_work": 0
-        }
+        users[uid] = {"money": 1000, "bank": 0}
     return users[uid]
 
-# ================= BASIC =================
+# ================= EFFECT HELPERS =================
+
+async def loading_bar(msg, steps=10, delay=0.2):
+    for i in range(steps):
+        bar = "█" * i + "░" * (steps - i)
+        await msg.edit(content=f"[{bar}]")
+        await asyncio.sleep(delay)
+
+async def spin_effect(msg, frames, delay=0.1):
+    for f in frames:
+        await msg.edit(content=f)
+        await asyncio.sleep(delay)
+
+# ================= BAL =================
+
 @bot.command()
 async def bal(ctx):
     u = get_user(ctx.author.id)
-    await ctx.send(f"💰 {u['money']} | 🏦 {u['bank']}")
+    embed = discord.Embed(title="💰 ACCOUNT", color=0x00ffcc)
+    embed.add_field(name="💵 Money", value=u['money'])
+    embed.add_field(name="🏦 Bank", value=u['bank'])
+    await ctx.send(embed=embed)
 
-@bot.command()
-async def pay(ctx, member: discord.Member, amount: int):
-    u = get_user(ctx.author.id)
-    r = get_user(member.id)
+# ================= FLIP =================
 
-    if u["money"] < amount:
-        return await ctx.send("❌ Không đủ tiền")
-
-    u["money"] -= amount
-    r["money"] += amount
-    save()
-
-    await ctx.send(f"💸 {ctx.author.mention} → {member.mention} {amount}")
-
-# ================= DAILY / WORK =================
-@bot.command()
-async def daily(ctx):
-    u = get_user(ctx.author.id)
-    now = time.time()
-
-    if now - u["last_daily"] < 86400:
-        return await ctx.send("⏳ Đợi daily")
-
-    reward = random.randint(500, 1500)
-    u["money"] += reward
-    u["last_daily"] = now
-    save()
-
-    await ctx.send(f"🎁 +{reward}")
-
-@bot.command()
-async def work(ctx):
-    u = get_user(ctx.author.id)
-    now = time.time()
-
-    if now - u["last_work"] < 30:
-        return await ctx.send("⏳ nghỉ 30s")
-
-    earn = random.randint(100, 600)
-    u["money"] += earn
-    u["last_work"] = now
-    save()
-
-    await ctx.send(f"🧑‍💼 +{earn}")
-
-# ================= BANK =================
-@bot.command()
-async def deposit(ctx, amount: int):
-    u = get_user(ctx.author.id)
-
-    if u["money"] < amount:
-        return await ctx.send("❌ thiếu tiền")
-
-    u["money"] -= amount
-    u["bank"] += amount
-    save()
-
-    await ctx.send("🏦 gửi thành công")
-
-@bot.command()
-async def withdraw(ctx, amount: int):
-    u = get_user(ctx.author.id)
-
-    if u["bank"] < amount:
-        return await ctx.send("❌ thiếu bank")
-
-    u["bank"] -= amount
-    u["money"] += amount
-    save()
-
-    await ctx.send("💸 rút thành công")
-
-# ================= CASINO =================
 @bot.command()
 async def flip(ctx, bet: int):
     u = get_user(ctx.author.id)
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
+    if bet <= 0 or u["money"] < bet:
+        return await ctx.send("❌ invalid bet")
 
-    if random.choice([True, False]):
+    msg = await ctx.send("🪙 starting...")
+
+    await loading_bar(msg)
+
+    frames = ["🪙","🔄","🪙","🔄","🪙","✨"]
+    await spin_effect(msg, frames, 0.2)
+
+    win = random.choice([True, False])
+    if win:
         u["money"] += bet
-        msg = "🎉 win"
+        text = "🎉 WIN"
     else:
         u["money"] -= bet
-        msg = "💀 lose"
+        text = "💀 LOSE"
 
     save()
-    await ctx.send(msg)
+    await msg.edit(content=text)
 
-@bot.command()
-async def taixiu(ctx, bet: int, choice: str):
-    u = get_user(ctx.author.id)
-
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
-
-    dice = [random.randint(1, 6) for _ in range(3)]
-    total = sum(dice)
-    result = "tài" if total >= 11 else "xỉu"
-
-    if choice == result:
-        u["money"] += bet
-        msg = "🎉 win"
-    else:
-        u["money"] -= bet
-        msg = "💀 lose"
-
-    save()
-    await ctx.send(f"{msg} {dice} = {total}")
-
-@bot.command()
-async def baucu(ctx, bet: int):
-    u = get_user(ctx.author.id)
-    animals = ["nai", "bầu", "gà", "cá", "cua", "tôm"]
-
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
-
-    result = random.choice(animals)
-
-    if random.choice(animals) == result:
-        u["money"] += bet * 3
-        msg = "🎉 win x3"
-    else:
-        u["money"] -= bet
-        msg = "💀 lose"
-
-    save()
-    await ctx.send(f"{msg} {result}")
+# ================= SLOT =================
 
 @bot.command()
 async def slot(ctx, bet: int):
     u = get_user(ctx.author.id)
-    icons = ["🍒", "🍋", "🍉", "7️⃣"]
+    if bet <= 0 or u["money"] < bet:
+        return await ctx.send("❌ invalid bet")
 
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
+    icons = ["🍒","🍋","🍉","7️⃣","💎"]
+    msg = await ctx.send("🎰 loading...")
 
-    r = [random.choice(icons) for _ in range(3)]
+    await loading_bar(msg)
+
+    speed = 0.05
+    for i in range(15):
+        r = [random.choice(icons) for _ in range(3)]
+        await msg.edit(content="🎰 " + " ".join(r))
+        await asyncio.sleep(speed)
+        speed += 0.01
 
     if r[0] == r[1] == r[2]:
-        win = bet * 5
+        win = bet * 7
         u["money"] += win
-        msg = "🎰 JACKPOT"
+        text = f"💎 JACKPOT +{win}"
     else:
         u["money"] -= bet
-        msg = "💀 lose"
+        text = "💀 lose"
 
     save()
-    await ctx.send(f"{msg} {' '.join(r)}")
+    await msg.edit(content=f"🎰 {' '.join(r)}\n{text}")
 
-# ================= MINI GAMES =================
+# ================= TAIXIU =================
+
 @bot.command()
-async def guess(ctx, bet: int, number: int):
+async def taixiu(ctx, bet: int, choice: str):
     u = get_user(ctx.author.id)
+    if bet <= 0 or u["money"] < bet:
+        return await ctx.send("❌ invalid bet")
 
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
+    msg = await ctx.send("🎲 loading...")
 
-    secret = random.randint(1, 5)
+    await loading_bar(msg)
 
-    if number == secret:
-        u["money"] += bet * 3
-        msg = "🎉 win"
+    for i in range(10):
+        fake = [random.randint(1,6) for _ in range(3)]
+        await msg.edit(content=f"🎲 {fake}")
+        await asyncio.sleep(0.1 + i*0.02)
+
+    dice = [random.randint(1,6) for _ in range(3)]
+    total = sum(dice)
+    result = "tài" if total >= 11 else "xỉu"
+
+    if choice.lower() == result:
+        u["money"] += bet
+        text = "🎉 WIN"
     else:
         u["money"] -= bet
-        msg = "💀 lose"
+        text = "💀 LOSE"
 
     save()
-    await ctx.send(f"{msg} ({secret})")
+    await msg.edit(content=f"🎲 {dice} = {total}\n{text}")
+
+# ================= ROLL =================
 
 @bot.command()
 async def roll(ctx, bet: int):
     u = get_user(ctx.author.id)
+    if bet <= 0 or u["money"] < bet:
+        return await ctx.send("❌ invalid bet")
 
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
+    msg = await ctx.send("🎯 loading...")
 
-    n = random.randint(1, 100)
+    await loading_bar(msg)
+
+    n = 0
+    for i in range(15):
+        n = random.randint(1,100)
+        await msg.edit(content=f"🎯 {n}")
+        await asyncio.sleep(0.05 + i*0.01)
 
     if n > 80:
-        u["money"] += bet * 2
-        msg = "🔥 big win"
+        u["money"] += bet*2
+        text = "🔥 BIG WIN"
     elif n > 40:
-        msg = "😐 neutral"
+        text = "😐 draw"
     else:
         u["money"] -= bet
-        msg = "💀 lose"
+        text = "💀 lose"
 
     save()
-    await ctx.send(f"{msg} {n}")
+    await msg.edit(content=f"🎯 {n}\n{text}")
+
+# ================= GUESS =================
+
+@bot.command()
+async def guess(ctx, bet: int, number: int):
+    u = get_user(ctx.author.id)
+    if bet <= 0 or u["money"] < bet:
+        return await ctx.send("❌ invalid bet")
+
+    msg = await ctx.send("🔢 thinking...")
+
+    await loading_bar(msg)
+
+    for i in range(8):
+        await msg.edit(content=f"🔢 {random.randint(1,5)}")
+        await asyncio.sleep(0.15)
+
+    secret = random.randint(1,5)
+
+    if number == secret:
+        u["money"] += bet*3
+        text = "🎉 WIN"
+    else:
+        u["money"] -= bet
+        text = "💀 LOSE"
+
+    save()
+    await msg.edit(content=f"🔢 {secret}\n{text}")
+
+# ================= BOMB =================
 
 @bot.command()
 async def bomb(ctx, bet: int):
     u = get_user(ctx.author.id)
+    if bet <= 0 or u["money"] < bet:
+        return await ctx.send("❌ invalid bet")
 
-    if u["money"] < bet:
-        return await ctx.send("❌ thiếu tiền")
+    msg = await ctx.send("💣 preparing...")
 
-    if random.randint(1, 3) == 1:
-        u["money"] += bet * 4
-        msg = "💥 survive win"
+    await loading_bar(msg)
+
+    wires = ["🟥","🟦","🟩","🟨"]
+
+    for i in range(10):
+        await msg.edit(content=" ".join(random.sample(wires,4)))
+        await asyncio.sleep(0.1 + i*0.02)
+
+    if random.randint(1,4) == 1:
+        u["money"] += bet*4
+        text = "💥 SAFE"
     else:
         u["money"] -= bet
-        msg = "💣 boom lose"
+        text = "💀 BOOM"
 
     save()
-    await ctx.send(msg)
-
-# ================= LEADERBOARD =================
-@bot.command()
-async def top(ctx):
-    sorted_users = sorted(users.items(), key=lambda x: x[1]["money"], reverse=True)
-
-    msg = "🏆 TOP:\n"
-    for i, (uid, data) in enumerate(sorted_users[:5]):
-        user = await bot.fetch_user(int(uid))
-        msg += f"{i+1}. {user.name} - {data['money']}\n"
-
-    await ctx.send(msg)
+    await msg.edit(content=text)
 
 # ================= READY =================
+
 @bot.event
 async def on_ready():
-    print(f"{bot.user} online")
+    print(f"{bot.user} online PRO MAX")
 
 bot.run(TOKEN)
