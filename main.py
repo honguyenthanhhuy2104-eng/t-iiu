@@ -35,36 +35,10 @@ def get_user(uid):
 # ================= GIF LINKS =================
 
 SLOT_GIF = "https://media.giphy.com/media/3o7aCTfyhYawdOXcFW/giphy.gif"
-COIN_GIF = "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif"
-DICE_GIF = "https://media.giphy.com/media/26BRuo6sLetdllPAQ/giphy.gif"
-
-# ================= FLIP =================
-
-@bot.command()
-async def flip(ctx, bet: int):
-    u = get_user(ctx.author.id)
-    if bet <= 0 or u["money"] < bet:
-        return await ctx.send("❌ invalid bet")
-
-    embed = discord.Embed(title="🪙 Tung xu...", color=0xffff00)
-    embed.set_image(url=COIN_GIF)
-    msg = await ctx.send(embed=embed)
-
-    await asyncio.sleep(2)
-
-    win = random.choice([True, False])
-
-    if win:
-        u["money"] += bet
-        result = "🎉 WIN"
-    else:
-        u["money"] -= bet
-        result = "💀 LOSE"
-
-    save()
-
-    embed.title = f"🪙 Kết quả: {result}"
-    await msg.edit(embed=embed)
+SLOT_STOP_GIF = "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif"
+DICE_GIF = "https://media.giphy.com/media/l0MYGb3y1Wk8Y2G0k/giphy.gif"
+WIN_GIF = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
+LOSE_GIF = "https://media.giphy.com/media/ISOckXUybVfQ4/giphy.gif"
 
 # ================= SLOT =================
 
@@ -74,27 +48,37 @@ async def slot(ctx, bet: int):
     if bet <= 0 or u["money"] < bet:
         return await ctx.send("❌ invalid bet")
 
-    embed = discord.Embed(title="🎰 Đang quay...", color=0xff0000)
+    embed = discord.Embed(title="🎰 Máy đang quay...", color=0xff0000)
     embed.set_image(url=SLOT_GIF)
     msg = await ctx.send(embed=embed)
 
-    await asyncio.sleep(3)
+    await asyncio.sleep(2)
 
+    # dừng từng cột
     icons = ["🍒","🍋","🍉","7️⃣","💎"]
-    r = [random.choice(icons) for _ in range(3)]
+    r = ["❓","❓","❓"]
 
+    for i in range(3):
+        await asyncio.sleep(1)
+        r[i] = random.choice(icons)
+        embed.title = f"🎰 {' | '.join(r)}"
+        embed.set_image(url=SLOT_STOP_GIF)
+        await msg.edit(embed=embed)
+
+    # kết quả
     if r[0] == r[1] == r[2]:
         win = bet * 8
         u["money"] += win
-        text = f"💎 JACKPOT +{win}"
+        result = f"💎 JACKPOT +{win}"
+        embed.set_image(url=WIN_GIF)
     else:
         u["money"] -= bet
-        text = "💀 thua"
+        result = "💀 Thua"
+        embed.set_image(url=LOSE_GIF)
 
     save()
 
-    embed.title = f"🎰 {' | '.join(r)}"
-    embed.description = text
+    embed.description = result
     await msg.edit(embed=embed)
 
 # ================= TAIXIU =================
@@ -105,7 +89,7 @@ async def taixiu(ctx, bet: int, choice: str):
     if bet <= 0 or u["money"] < bet:
         return await ctx.send("❌ invalid bet")
 
-    embed = discord.Embed(title="🎲 Lắc xúc xắc...", color=0x00ffff)
+    embed = discord.Embed(title="🎲 Đang lắc xúc xắc...", color=0x00ffff)
     embed.set_image(url=DICE_GIF)
     msg = await ctx.send(embed=embed)
 
@@ -118,9 +102,11 @@ async def taixiu(ctx, bet: int, choice: str):
     if choice.lower() == result:
         u["money"] += bet
         text = "🎉 WIN"
+        embed.set_image(url=WIN_GIF)
     else:
         u["money"] -= bet
         text = "💀 LOSE"
+        embed.set_image(url=LOSE_GIF)
 
     save()
 
@@ -132,6 +118,6 @@ async def taixiu(ctx, bet: int, choice: str):
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user} GIF MODE ONLINE")
+    print(f"{bot.user} ULTRA GIF ONLINE")
 
 bot.run(TOKEN)
