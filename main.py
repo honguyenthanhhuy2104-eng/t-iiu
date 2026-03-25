@@ -4,7 +4,7 @@ import json, random, os, asyncio, time, traceback
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.getenv("MTQ4NjI1NzI4NzkxOTE3MzY2Mg.GJVNn7.rq9iZVajgtoF0Q3uD0ogH9Pjb6jc0xqTxXsJ3U")
+TOKEN = os.getenv("")
 
 if not TOKEN:
     print("⚠️ TOKEN chưa set")
